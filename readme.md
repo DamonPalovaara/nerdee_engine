@@ -4,6 +4,11 @@ This is supposed to be the start of a game engine
 	* I got a camera working with movement
 	* Instead of doing infinite terrain I wanted to make an entire planet instead
 
+Running the program
+* As long as you have Rust install with cargo you should be able to use "cargo run" inside main directory
+* Right now my terrain generator isn't "plugged" in so all you'll see is a cube
+* I haven't implemented escape yet so you'll have to alt-tab to the command shell running it and press "ctrl+c" to exit (sorry)
+
 Some notes to whoever might be reading this:
 * I started this project over a year ago
 * At one point the Terrain was working and had direct lighting
