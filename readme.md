@@ -1,10 +1,10 @@
 This is supposed to be the start of a game engine
 * My goal was to create a realistic looking version of Minecraft
-        * I created a terrain generator using simplex noise
-        * I got a camera working with movement
-        * Instead of doing infinite terrain I wanted to make an entire planet instead
+	* I created a terrain generator using simplex noise
+	* I got a camera working with movement
+	* Instead of doing infinite terrain I wanted to make an entire planet instead
 
-Some notes to whoever else might be reading this:
+Some notes to whoever might be reading this:
 * I started this project over a year ago
 * At one point the Terrain was working and had direct lighting
 * I removed it so that I can focus on getting movement to work
