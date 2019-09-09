@@ -1,4 +1,4 @@
-This is supposed to be the start of a game engine
+This is the start of a game engine
 * My goal was to create a realistic looking version of Minecraft
 	* I created a terrain generator using simplex noise
 	* I got a camera working with movement
@@ -9,7 +9,7 @@ Running the program
 * Right now my terrain generator isn't "plugged" in so all you'll see is a cube
 * I haven't implemented escape yet so you'll have to alt-tab to the command shell running it and press "ctrl+c" to exit (sorry)
 
-Some notes to whoever might be reading this:
+Some notes to anybody reading this:
 * I started this project over a year ago
 * At one point the Terrain was working and had direct lighting
 * I removed it so that I can focus on getting movement to work
@@ -22,3 +22,28 @@ Some notes to whoever might be reading this:
 * What this project shows is my willingness to self-learn
 * I want to reimplement terrain but I'll have to spend some time reading this code to figure out where I left off
 	* I didn't comment as well as I do now 
+
+TODO:
+* Read through code and comment everything
+* Get an idea on how to reimplement the terrain module
+* Consider programming a "planet" module (in place of terrain)
+	* Only surface to be generated
+	* Ground only generated when needed (jit generation)
+	* Materials will have a "hardness" value used for erosion simulation
+	* Figure out an acurate way to simulate water
+		* Create inland lakes
+		* Rivers that flow from high to low
+		* Erode the terrain based on water flow rate, hardness of material, and age
+			* Be able to form canyons procedurally
+	* How would I tesalate a planet
+* Begin work on implementing physics
+	* Collision detection
+		* It's possible to use a GPU to generate a heightmap
+		* Treat heightmap as 2D array that returns a height at point (x, y)
+			* See visualizations ^^
+		* Interpolate inbetween points
+	* Gravity
+		* If done on the planet scale I'll have to keep track of orientation and where to fall
+			* Could have each chunk generate a tangent plane to the center point
+			* See visualizations ^^ 
+	* Orbiting planets

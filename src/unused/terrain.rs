@@ -127,11 +127,7 @@ pub struct TerrainGenerator {
 
 	}
 	*/
-	/*
-		vec3f u(1.0f, 0.0f, map(x + 1, y) - map(x - 1, y));
-		vec3f v(0.0f, 1.0f, map(x, y + 1) - map(x, y - 1));
-		normal = normalize(cross(u, v));
-	*/
+
 	pub fn create_chunk(&self, chunk_loc: ChunkLocation) -> Chunk {
 		Chunk(
 			{
@@ -139,6 +135,8 @@ pub struct TerrainGenerator {
 
 				let mut max = 0.0f64;
 
+				// Maybe consider using a different coordinate system for "chunk space" vs world space
+				// x and z seem to be confusing
 				for z in chunk_loc.z * CHUNK_SIZE_I32..(chunk_loc.z + 1) * CHUNK_SIZE_I32 {
 					for x in chunk_loc.x * CHUNK_SIZE_I32..(chunk_loc.x + 1) * CHUNK_SIZE_I32 {
 
