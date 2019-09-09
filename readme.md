@@ -24,6 +24,7 @@ Some notes to anybody reading this:
 	* I didn't comment as well as I do now 
 
 TODO:
+* ESCAPE KEY!
 * Read through code and comment everything
 * Get an idea on how to reimplement the terrain module
 * Consider programming a "planet" module (in place of terrain)
