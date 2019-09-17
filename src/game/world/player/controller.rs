@@ -37,9 +37,11 @@ pub struct Controller {
 	pub fn reset_key_states() {
 
 	}
+
+	// NEEDS TO BE REFACTORED
 	pub fn handle_keyboard_events(&mut self, keycode: u32, pressed: glutin::ElementState) {
 
-		// True if pressed\
+		// True if pressed
 		let state = match pressed {
 			glutin::ElementState::Pressed => true,
 			_ => false
@@ -49,7 +51,7 @@ pub struct Controller {
 
 		// Consider getting rid of unneeded variable declarations
 		match keycode {
-			// W key
+			// W keywasd
 			17 => self.move_forward  = state,
 			// A key
 			30 => self.move_left     = state,
@@ -66,11 +68,13 @@ pub struct Controller {
 			//_  => println!("{}", keycode),
 		}
 	}
+
 	pub fn handle_mouse_events(&mut self, x: f32, y: f32) {
 		self.x_axis = Rad( (x - self.half_width ) / self.half_width  );
 		self.y_axis = Rad( (y - self.half_height) / self.half_height );
 		//println!("x: {:?}, y: {:?}", self.x_axis, self.y_axis);
 	}
+	
 	pub fn resize(&mut self, width: f32, height: f32) {
 		self.half_width  = width  / 2.0;
 		self.half_height = height / 2.0;

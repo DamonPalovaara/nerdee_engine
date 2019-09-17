@@ -69,6 +69,7 @@ pub struct Player {
 		let mut offset = Vector3::new(0.0, 0.0, 0.0);
 
 		// Figure out what move keys are being pressed and add to offset accordingly
+		// This can be optimized!
 		if self.controller.move_forward {
 			offset.z -= 1.0;
 		}
@@ -100,5 +101,5 @@ pub struct Player {
 		
 		//Create the translation matrix
 		self.translation_matrix = Matrix4::from_translation( self.position ).into();
-	}
+	}s
 }

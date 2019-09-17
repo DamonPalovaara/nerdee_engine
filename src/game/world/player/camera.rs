@@ -15,10 +15,11 @@ fn get_perspective(width: f32, height: f32, fov_matrix: f32) -> [[f32; 4]; 4] {
     ]
 }
 
+// Convert a fov value in degrees to be used to generate perspective matrix
 fn degrees_to_matrix(fov_degrees: f32) -> f32 {
 	1.0 / (fov_degrees.to_radians() / 2.0).tan()
 }
-
+s
 pub struct Camera {
 	width:       f32,
 	height:      f32,

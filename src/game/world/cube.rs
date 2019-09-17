@@ -2,6 +2,7 @@ use Vertex;
 use glium;
 use glium::{Display, VertexBuffer, IndexBuffer, Program, DrawParameters, Frame, Surface};
 
+// The vertices of the cube
 const CUBE_VERTICES: [Vertex; 8] = [
 	Vertex { position: [-1.0, -1.0, -1.0] },
 	Vertex { position: [-1.0,  1.0, -1.0] },
@@ -13,6 +14,8 @@ const CUBE_VERTICES: [Vertex; 8] = [
 	Vertex { position: [ 1.0,  1.0,  1.0] }
 ];
 
+// The lines that make up the cube
+// The numbers are indexes to the array above ^^^
 const CUBE_INDICES: [u16; 36] = [	
 	// Left
 	0, 1, 2,
@@ -34,6 +37,9 @@ const CUBE_INDICES: [u16; 36] = [
 	0, 5, 4
 ];
 
+// Consider saving shaders as seperate files and loading them instead
+
+// Vertex shader for the cube
 const CUBE_VERTEX_SHADER: &str = r#"
 	#version 150
 
@@ -52,6 +58,7 @@ const CUBE_VERTEX_SHADER: &str = r#"
 	}
 "#;
 
+// Fragment shader for the cube
 const CUBE_FRAGMENT_SHADER: &str = r#"
 	#version 150
 
@@ -89,7 +96,15 @@ pub struct Cube {
         	],
 		}
 	}
-	pub fn draw(& self, mut target: Frame, translation: [[f32; 4]; 4], rotation: [[f32; 4]; 4], perspective: [[f32; 4]; 4], params: DrawParameters) -> Frame {
+
+	// This needs to be cleaned up, also not 100% sure what this is doing
+	pub fn draw(& self, 
+		mut target:  Frame,
+		translation: [[f32; 4]; 4], // raw 4x4 matrix
+		rotation:    [[f32; 4]; 4], 
+		perspective: [[f32; 4]; 4], 
+		params: DrawParameters) -> Frame 
+	{
 		 // The actual draw call
         target.draw(
         	& self.positions,

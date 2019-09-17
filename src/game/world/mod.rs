@@ -1,13 +1,14 @@
-mod player;
+mod player; 
 mod cube;
 
-use glium::{self, Display, Surface, DrawParameters};
-use self::player::Player;
+use glium::{self, Display, Surface, DrawParameters}; 
+use self::player::Player;                             
 use self::cube::Cube;
 
 pub struct World {
-	pub player: Player,
+	pub player: Player, // Why is this public?
 	pub cube:   Cube,
+	// terrain
 } impl World {
 	pub fn new(display: &Display) -> World {
 		let (width, height) = display.get_framebuffer_dimensions();

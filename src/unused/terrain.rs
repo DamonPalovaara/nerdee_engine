@@ -154,6 +154,7 @@ pub struct TerrainGenerator {
 								y_loc as f32,
 								z_loc as f32
 							),
+							// hmm
 							normal: normalize( &( x as f32 / CHUNK_SIZE_F32, 
 												  y_loc as f32,
 								                  z as f32 / CHUNK_SIZE_F32
