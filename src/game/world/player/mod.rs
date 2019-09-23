@@ -4,6 +4,7 @@ mod controller;
 use self::camera::Camera;
 use self::controller::Controller;
 
+// Could just import all of cgmath
 use cgmath::{Vector3, Matrix4, Rad, Euler, Basis3, InnerSpace, Rotation, Zero};
 
 const ACCELERATION: f32 = 0.05;
@@ -44,10 +45,14 @@ pub struct Player {
 			rotation_matrix: new_matrix(),
 		}
 	}
+
+	// Implement usage of delta_time rather than rely on frame cap
 	pub fn update(&mut self, delta_time: f32) {
+
+		// Turn these into a single Quaternion
+
 		// X axis on mouse rotates the camera around the y axis
 		self.y_rot += self.controller.x_axis * Y_LOOK_SENS;
-
 		// Y axis on mouse rotates the camera around the x axis
 		self.x_rot += self.controller.y_axis * X_LOOK_SENS;
 
@@ -91,7 +96,7 @@ pub struct Player {
 
 		// Normalize vector
 		if !offset.is_zero() {
-			self.velocity += rotate.rotate_vector( offset.normalize_to(ACCELERATION) );
+			self.velocity += rotate.rotate_vector( offset.normalize_to(ACCELERATION) ) * 0.5;
 		}
 
 		// Add the velocity to the position
@@ -101,5 +106,5 @@ pub struct Player {
 		
 		//Create the translation matrix
 		self.translation_matrix = Matrix4::from_translation( self.position ).into();
-	}s
+	}
 }

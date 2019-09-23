@@ -36,7 +36,8 @@ pub struct World {
     			.. Default::default()
     		},
     		// Enable Line render
-    		polygon_mode: glium::draw_parameters::PolygonMode::Line,
+    		polygon_mode: glium::draw_parameters::PolygonMode::Fill,
+    		multisampling: true,
     		.. Default::default()
         };
 

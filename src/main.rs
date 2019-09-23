@@ -9,7 +9,6 @@ use glium::glutin::{self, EventsLoop};
 mod game;
 use game::Game;
 
-const TAU_F32: f32 = std::f32::consts::PI;
 const FRAME_RATE: f64 = 120.0;
 const FRAME_GAP_NS: u64 = ((1.0 / FRAME_RATE) * 1_000_000_000.0) as u64;
 
@@ -24,13 +23,15 @@ fn main() {
 	setup();
 }
 
-// Setups everything to run
+// Setup everything to run
 fn setup() {
 	let events = EventsLoop::new();
-	let mut game = Game::new(&events, (1280, 720));
+	let game = Game::new(&events, (1280, 720));
 	game_loop(events, game);
 }
 
+// Called once game has exited
+// do all of my end of program stuff (e.g. saving data)
 fn exit_program() {
 	println!("Program is exiting!");
 }
@@ -39,23 +40,24 @@ fn exit_program() {
 fn game_loop(mut events: EventsLoop, mut game: Game) {
 	// Init the time variables
 	let mut time_now = time::precise_time_ns();
-	let mut time_last = time_now.clone();
+	let mut time_last;
 	let mut time_delta = 0;
 	// True when program is ready to exit
 	// Either use exit_program() or the drop trait for anything that needs to be done after exit (e.g. saving data)
-	let mut exit = false;
+	let mut running = true;
 
 	// The actual game loop
-	while !exit {
+	while running {
 
 		// Polling events
 		events.poll_events(|event| {
 			match event {
                 glutin::Event::WindowEvent { event, .. } => match event {
-                    glutin::WindowEvent::Closed                    => exit = true,
+                    glutin::WindowEvent::Closed                    => running = false,
                     glutin::WindowEvent::Resized(x, y)             => game.resize((x, y)),
                     glutin::WindowEvent::KeyboardInput{ input, ..} => game.forward_keyboard_events(input.scancode, input.state),
                     glutin::WindowEvent::CursorMoved{ position,..} => game.forward_mouse_events(position),
+                    // docs.rs/glutin/0.8.0/glutin/enum.WindowEvent.html
                     _ => ()
                 },
                 _ => ()

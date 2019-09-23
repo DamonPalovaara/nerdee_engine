@@ -19,7 +19,7 @@ fn get_perspective(width: f32, height: f32, fov_matrix: f32) -> [[f32; 4]; 4] {
 fn degrees_to_matrix(fov_degrees: f32) -> f32 {
 	1.0 / (fov_degrees.to_radians() / 2.0).tan()
 }
-s
+
 pub struct Camera {
 	width:       f32,
 	height:      f32,
@@ -38,9 +38,11 @@ pub struct Camera {
         	perspective: get_perspective(width, height, fov_matrix),
         }
     }
+
     pub fn resize(&mut self, width: f32, height: f32) {
     	self.perspective = get_perspective(width, height, self.fov_matrix);
     }
+
     fn update_fov(&mut self, fov_degrees: f32) {
     	self.fov_degrees = fov_degrees;
     	// Converts it to the value needed for the perspective matrix

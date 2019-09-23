@@ -97,7 +97,7 @@ pub struct Cube {
 		}
 	}
 
-	// This needs to be cleaned up, also not 100% sure what this is doing
+	// This needs to be cleaned up
 	pub fn draw(& self, 
 		mut target:  Frame,
 		translation: [[f32; 4]; 4], // raw 4x4 matrix
