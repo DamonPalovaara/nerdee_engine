@@ -1,82 +1,97 @@
-extern crate noise;
-#[macro_use]
-extern crate glium;
-extern crate time;
-extern crate cgmath;
+// Used for creating a window and receiving events
+// docs.rs/winit/0.19.3/winit/index.html
+extern crate winit;
 
-use glium::glutin::{self, EventsLoop};
+// Event loop stuff
+// docs.rs/winit/0.19.3/winit/struct.EventsLoop.html
+use winit::{Event, WindowEvent};
 
-mod game;
-use game::Game;
-
-const FRAME_RATE: f64 = 120.0;
-const FRAME_GAP_NS: u64 = ((1.0 / FRAME_RATE) * 1_000_000_000.0) as u64;
-
-#[derive(Copy, Clone)]
-pub struct Vertex {
-	position: [f32; 3],
+fn main() {
+	// Creates the game struct then runs it
+	Game::new().run();
 }
 
-implement_vertex!(Vertex, position);
+#[derive(Debug)]
+struct Game {
 
-fn main() {	
-	setup();
-}
+	running: bool, // Used to break out of game-loop
 
-// Setup everything to run
-fn setup() {
-	let events = EventsLoop::new();
-	let game = Game::new(&events, (1280, 720));
-	game_loop(events, game);
-}
+} 
 
-// Called once game has exited
-// do all of my end of program stuff (e.g. saving data)
-fn exit_program() {
-	println!("Program is exiting!");
-}
+impl Game {
 
-// The heart beat
-fn game_loop(mut events: EventsLoop, mut game: Game) {
-	// Init the time variables
-	let mut time_now = time::precise_time_ns();
-	let mut time_last;
-	let mut time_delta = 0;
-	// True when program is ready to exit
-	// Either use exit_program() or the drop trait for anything that needs to be done after exit (e.g. saving data)
-	let mut running = true;
-
-	// The actual game loop
-	while running {
-
-		// Polling events
-		events.poll_events(|event| {
-			match event {
-                glutin::Event::WindowEvent { event, .. } => match event {
-                    glutin::WindowEvent::Closed                    => running = false,
-                    glutin::WindowEvent::Resized(x, y)             => game.resize((x, y)),
-                    glutin::WindowEvent::KeyboardInput{ input, ..} => game.forward_keyboard_events(input.scancode, input.state),
-                    glutin::WindowEvent::CursorMoved{ position,..} => game.forward_mouse_events(position),
-                    // docs.rs/glutin/0.8.0/glutin/enum.WindowEvent.html
-                    _ => ()
-                },
-                _ => ()
-            };
-		});
-
-		// Update the game
-		game.update(time_delta);
-		// Draw the game
-		game.draw();		
-
-		// Update time variables
-		time_last = time_now;
-		time_now = time::precise_time_ns();
-		// Enforce frame cap
-		while time_now - time_last < FRAME_GAP_NS { time_now = time::precise_time_ns() };
-		// Consider moving this else where
-		time_delta = time_now - time_last;
+	// Init struct
+	fn new() -> Game {
+		Game {
+			running: true,
+		}
 	}
-	// Call to exit program function after the while loop breaks
-	exit_program();
+	
+	// Run the game, note that this method runs until game is closed
+	fn run(&mut self) {
+		let mut events = winit::EventsLoop::new();
+		let _window = winit::Window::new(&events).unwrap();
+
+		// The game loop
+		while self.running {
+			// Sends every new event into the handle_event method
+			// Think of this as for event in events { self.handle_event(event) }
+			events.poll_events( |event| self.handle_event(event) );
+			self.update();
+			self.draw();
+		}
+	}
+
+	// Handles each event
+	fn handle_event(&mut self, event: winit::Event) {
+
+		// This is a match block, it's job is to figure out what event was passed
+		// and do different things for each event
+		// This is a nested match block, first part sorts between window and device events
+		// doc.rust-lang.org/rust-by-example/flow_control/match.html
+		// docs.rs/winit/0.19.3/winit/enum.Event.html
+        match event {
+
+        	// These are events associated with the window
+        	// docs.rs/winit/0.19.3/winit/enum.WindowEvent.html
+        	Event::WindowEvent { event, .. } => match event {
+
+        		WindowEvent::CloseRequested => self.running = false,
+        		// ...
+        		_ => (), // Default statement
+
+        	}
+
+        	// These are events associated with the mouse
+        	// docs.rs/winit/0.19.3/winit/enum.DeviceEvent.html
+        	Event::DeviceEvent { event, .. } => match event {
+
+        		// ...
+        		_ => (),
+
+        	}
+
+        	// Default statement
+        	_ => (),
+
+        }
+    }
+
+    // Update all of the game logic
+    fn update(&mut self) {
+    	// Do update stuff here
+    }
+
+    // Renders to screen
+    // * Note that self isn't mut, update is responsible for changing values
+    fn draw(& self) {
+    	// Do render stuff here
+    }
+}
+
+// Called once game leaves scope
+impl Drop for Game {
+    fn drop(&mut self) {
+        println!("Game has closed");
+    }
 }

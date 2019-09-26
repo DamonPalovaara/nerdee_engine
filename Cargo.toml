@@ -4,7 +4,4 @@ version = "0.1.0"
 authors = ["nerdee"]
 
 [dependencies]
-glium = "0.20.0"
-noise = "0.5.1"
-time = "0.1.39"
-cgmath = "0.16.1"
+winit = "0.19.3"
