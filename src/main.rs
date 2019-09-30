@@ -1,97 +1,94 @@
-// Used for creating a window and receiving events
-// docs.rs/winit/0.19.3/winit/index.html
-extern crate winit;
+extern crate read_input;
+extern crate vulkano;
+extern crate image;
 
-// Event loop stuff
-// docs.rs/winit/0.19.3/winit/struct.EventsLoop.html
-use winit::{Event, WindowEvent};
+use std::sync::Arc;
+
+use read_input::prelude::*;
+
+use image::{ImageBuffer, Rgba};
+
+use vulkano::instance::{Instance, InstanceExtensions, PhysicalDevice};
+use vulkano::device  ::{Device, DeviceExtensions, Features};
+use vulkano::buffer  ::{BufferUsage, CpuAccessibleBuffer};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer};
+use vulkano::sync::GpuFuture;
+use vulkano::pipeline::ComputePipeline;
+use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
+use vulkano::format::{ClearValue, Format};
+use vulkano::image::Dimensions;
+use vulkano::image::StorageImage;
 
 fn main() {
-	// Creates the game struct then runs it
-	Game::new().run();
-}
 
-#[derive(Debug)]
-struct Game {
-
-	running: bool, // Used to break out of game-loop
-
-} 
-
-impl Game {
-
-	// Init struct
-	fn new() -> Game {
-		Game {
-			running: true,
-		}
+	// Get a physical device
+	let instance = Instance::new(None, &InstanceExtensions::none(), None)
+		.expect("Failed to create instance");
+	let devices: Vec<PhysicalDevice> = PhysicalDevice::enumerate(&instance).collect();
+	for device in &devices {
+		println!("{}: {}", device.index(), device.name());
 	}
-	
-	// Run the game, note that this method runs until game is closed
-	fn run(&mut self) {
-		let mut events = winit::EventsLoop::new();
-		let _window = winit::Window::new(&events).unwrap();
+	// Have user select which device
+	let physical = devices[
+		input()
+			.inside_err(0..devices.len(), "Index not in range")
+			.repeat_msg("Select a device: ")
+			.err("Input must be a valid index (e.g. \"0\")").get()
+	];
+	println!("Using {}", physical.name());
 
-		// The game loop
-		while self.running {
-			// Sends every new event into the handle_event method
-			// Think of this as for event in events { self.handle_event(event) }
-			events.poll_events( |event| self.handle_event(event) );
-			self.update();
-			self.draw();
-		}
-	}
+	// Create a queue family that supports graphics
+	let queue_family = physical.queue_families()
+		.find(|&q| q.supports_graphics())
+		.expect("Couldn't find a graphical queue family");
 
-	// Handles each event
-	fn handle_event(&mut self, event: winit::Event) {
+	// Create the device and queues iter
+	let (device, mut queues) = {
+		Device::new(
+			physical, 
+			&Features::none(), 
+			&DeviceExtensions::none(),
+			[(queue_family, 0.5)].iter().cloned()
+		).expect("Failed to create device")
+	};
 
-		// This is a match block, it's job is to figure out what event was passed
-		// and do different things for each event
-		// This is a nested match block, first part sorts between window and device events
-		// doc.rust-lang.org/rust-by-example/flow_control/match.html
-		// docs.rs/winit/0.19.3/winit/enum.Event.html
-        match event {
+	// Select a queue to use
+	let queue = queues.next().unwrap();
 
-        	// These are events associated with the window
-        	// docs.rs/winit/0.19.3/winit/enum.WindowEvent.html
-        	Event::WindowEvent { event, .. } => match event {
+	let image = StorageImage::new(
+		device.clone(),
+		Dimensions::Dim2d {
+			width: 1024,
+			height: 1024
+		},
+		Format::R8G8B8A8Unorm,
+		Some(queue.family())
+	).unwrap();
 
-        		WindowEvent::CloseRequested => self.running = false,
-        		// ...
-        		_ => (), // Default statement
+	let buf = CpuAccessibleBuffer::from_iter(
+		device.clone(),
+		BufferUsage::all(),
+		(0..1024*1024 * 4).map(|_| 0u8)
+	).expect("Failed to create buffer");
 
-        	}
+	let command_buffer = AutoCommandBufferBuilder::new(
+		device.clone(),
+		queue.family()
+	).unwrap().clear_color_image(
+		image.clone(),
+		ClearValue::Float([0.0, 0.0, 1.0, 1.0])
+	).unwrap().copy_image_to_buffer(
+		image.clone(),
+		buf.clone()
+	).unwrap().build().unwrap();
 
-        	// These are events associated with the mouse
-        	// docs.rs/winit/0.19.3/winit/enum.DeviceEvent.html
-        	Event::DeviceEvent { event, .. } => match event {
+	let finished = command_buffer.execute(queue.clone()).unwrap();
+	finished.then_signal_fence_and_flush().unwrap().wait(None).unwrap();
 
-        		// ...
-        		_ => (),
+	let buffer_content = buf.read().unwrap();
+	let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..]).unwrap();
+	image.save("image.png").unwrap();
 
-        	}
+	println!("Everything succeeded!");
 
-        	// Default statement
-        	_ => (),
-
-        }
-    }
-
-    // Update all of the game logic
-    fn update(&mut self) {
-    	// Do update stuff here
-    }
-
-    // Renders to screen
-    // * Note that self isn't mut, update is responsible for changing values
-    fn draw(& self) {
-    	// Do render stuff here
-    }
-}
-
-// Called once game leaves scope
-impl Drop for Game {
-    fn drop(&mut self) {
-        println!("Game has closed");
-    }
 }
