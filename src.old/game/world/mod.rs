@@ -43,7 +43,13 @@ pub struct World {
 
         // All objects with a draw method need to return target allowing me to chain the draw calls together (needed because Frame doesn't implement clone and it's cleaner)
         // Consider adding a custom draw function to frame instead which takes in a custom object type (target.draw(cube).draw(terrain)...)
-    	self.cube.draw(target, self.player.translation_matrix, self.player.rotation_matrix, self.player.camera.perspective, params).finish().unwrap();
+    	self.cube.draw(
+    		target, 
+    		self.player.translation_matrix, 
+    		self.player.rotation_matrix, 
+    		self.player.camera.perspective, 
+    		params
+    	).finish().unwrap();
 	}
 	pub fn resize(&mut self, width: f32, height: f32) {
 		// A bit hackish, consider refactoring
