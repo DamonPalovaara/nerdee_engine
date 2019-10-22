@@ -1,175 +1,450 @@
-use vulkano::sync::SharingMode;
-use vulkano::swapchain::Swapchain;
-use vulkano::swapchain::PresentMode;
-use vulkano::swapchain::CompositeAlpha;
-use vulkano::image::SwapchainImage;
-use vulkano::image::ImageUsage;
-use winit::Window;
-use winit::EventsLoop;
-use winit::WindowBuilder;
+// Most of this code comes from the tutorial found at github.com/bwasty/vulkan-tutorial-rs
+// The tutorial is based off of the official tutorial found at vulkan-tutorial.com
 
-
-use vulkano::swapchain::Surface;
+use vulkano::pipeline::{
+    viewport::Viewport,
+    vertex::BufferlessDefinition,
+    GraphicsPipeline,
+};
 use std::sync::Arc;
-use vulkano::instance::{
-	Instance, 
-	InstanceExtensions,
-	Version,
-	ApplicationInfo,
-	PhysicalDevice,
+use std::collections::HashSet;
+
+#[allow(unused_imports)]
+use winit::{
+    EventsLoop, 
+    WindowBuilder, 
+    Window, 
+    dpi::LogicalSize, 
+    Event, 
+    WindowEvent,
+    DeviceEvent,
 };
-use vulkano::device::{
-	Device,
-	DeviceExtensions,
-	Features,
-	Queue,
-};
+
 use vulkano_win::VkSurfaceBuild;
 
+use vulkano::instance::{
+    Instance,
+    InstanceExtensions,
+    ApplicationInfo,
+    Version,
+    layers_list,
+    PhysicalDevice,
+};
+use vulkano::instance::debug::{DebugCallback, MessageTypes};
+use vulkano::device::{
+    Device, 
+    DeviceExtensions, 
+    Queue, 
+    Features
+};
+use vulkano::swapchain::{
+    Surface,
+    Capabilities,
+    ColorSpace,
+    SupportedPresentModes,
+    PresentMode,
+    Swapchain,
+    CompositeAlpha,
+};
+use vulkano::format::Format;
+use vulkano::image::{ImageUsage, swapchain::SwapchainImage};
+use vulkano::sync::SharingMode;
+
+
+// ===== Constants =====
+// TODO: Extract constants from file and/or launcher
+
+
+const APPLICATION_NAME:    &str    = "NerDee Engine";
+const APPLICATION_VERSION: Version = Version{ major: 0, minor: 1, patch: 0 };
+const WIDTH:  u32 = 800;
+const HEIGHT: u32 = 600;
+
+const VALIDATION_LAYERS: &[&str] =  &[ "VK_LAYER_LUNARG_standard_validation" ];
+
+#[cfg(all(debug_assertions))]
+const ENABLE_VALIDATION_LAYERS: bool = true;
+#[cfg(not(debug_assertions))]
+const ENABLE_VALIDATION_LAYERS: bool = false;
+
+
+// ===== End constants =====
+
+
+
+// ===== Utility structs =====
+
+
+// Required device extensions
+fn device_extensions() -> DeviceExtensions {
+    DeviceExtensions {
+        khr_swapchain: true,
+        .. vulkano::device::DeviceExtensions::none()
+    }
+}
+
+struct QueueFamilyIndices {
+    graphics_family: i32,
+    present_family:  i32,
+}
+
+impl QueueFamilyIndices {
+    fn new() -> Self {
+        Self { graphics_family: -1, present_family: -1 }
+    }
+
+    fn is_complete(&self) -> bool {
+        self.graphics_family >= 0 && self.present_family >= 0
+    }
+}
+
+
+// ===== End utility structs ===== 
+
+
+// The main struct
 pub struct EngineCore {
 
-	instance: Arc<Instance>,
-	physical: usize,
-	surface:  Arc<Surface<Window>>,
-	device:   Arc<Device>,
-	graphics_queue: Arc<Queue>,
-	present_queue:  Arc<Queue>,
-	swap_chain: Arc<Swapchain<Window>>,
-	swap_chain_images: Vec<Arc<SwapchainImage<Window>>>,
+    instance:       Arc<Instance>,
+    debug_callback: Option<DebugCallback>,
+
+    pub events_loop: EventsLoop,
+    surface:     Arc<Surface<Window>>,
+
+    physical_idx: usize,
+    device:       Arc<Device>,
+
+    graphics_queue: Arc<Queue>,
+    present_queue:  Arc<Queue>,
+
+    swap_chain:        Arc<Swapchain<Window>>,
+    swap_chain_images: Vec<Arc<SwapchainImage<Window>>>,
 
 }
 
 impl EngineCore {
 
-	pub fn new() -> EngineCore {
+    pub fn new() -> Self {
 
-		let instance = Self::create_instance();
-		let physical = Self::pick_physical_device(&instance);
-		let surface  = Self::create_surface(&instance);
-		let (device, graphics_queue, present_queue) = Self::create_device(&instance, physical);
-		let (swap_chain, swap_chain_images) = Self::create_swap_chain(&surface, &device, &present_queue, None);
+        let instance = Self::create_instance();
+        let debug_callback = Self::setup_debug_callback(&instance);
+        let (events_loop, surface) = Self::create_surface(&instance);
 
-		EngineCore {
-			instance: instance,
-			physical: physical,
-			surface:  surface,
+        let physical_idx = Self::pick_physical_device(&instance, &surface);
+        let (device, graphics_queue, present_queue) = Self::create_logical_device(
+            &instance, &surface, physical_idx);
 
-			device:         device,
-			graphics_queue: graphics_queue,
-			present_queue:  present_queue,
+        let (swap_chain, swap_chain_images) = Self::create_swap_chain(
+            &instance, 
+            &surface, 
+            physical_idx,
+            &device, 
+            &graphics_queue, 
+            &present_queue
+        );
 
-			swap_chain:        swap_chain,
-			swap_chain_images: swap_chain_images,
-		}
-	}
+        Self {
+            instance,
+            debug_callback,
 
-	fn create_instance() -> Arc<Instance> {
+            events_loop,
+            surface,
 
-		// TODO load app_info from txt file
-		let app_info = ApplicationInfo {
-			application_name:    Some("NerDee Engine".into()),
-			application_version: Some(Version { major: 0, minor: 1, patch: 0 }),
-			engine_name:         Some("NerDee Engine".into()),
-			engine_version:      Some(Version { major: 0, minor: 1, patch: 0 }),
-		};
+            physical_idx,
+            device,
 
-		let extensions: InstanceExtensions = vulkano_win::required_extensions();
+            graphics_queue,
+            present_queue,
 
-		Instance::new(Some(&app_info), &extensions, None).expect("failed to create Vulkan instance")
-	}
+            swap_chain,
+            swap_chain_images,
+        }
+    }
 
-	fn create_surface(instance: &Arc<Instance>) -> Arc<Surface<Window>> {
-		let events_loop = EventsLoop::new();
-		match WindowBuilder::new().build_vk_surface(&events_loop, instance.clone()) {
-			Ok(surface) => surface,
-			Err(err)    => panic!("Couldn't create surface: {:?}", err)
-		}
-	}
+    fn create_instance() -> Arc<Instance> {
+        if ENABLE_VALIDATION_LAYERS && !Self::check_validation_layer_support() {
+            println!("Validation layers requested, but not available!")
+        }
 
-	// TODO: Allow user selection of device
-	fn pick_physical_device(instance: &Arc<Instance>) -> usize {
-		for physical_device in PhysicalDevice::enumerate(&instance) {
-			println!("Available device: {}", physical_device.name());
-		}
-		return 0;
-	}
+        let supported_extensions = InstanceExtensions::supported_by_core()
+            .expect("failed to retrieve supported extensions");
+        println!("Supported extensions: {:?}", supported_extensions);
 
-	fn create_device(instance: &Arc<Instance>, physical_idx: usize) -> (Arc<Device>, Arc<Queue>, Arc<Queue>) {
+        let app_info = ApplicationInfo {
+            application_name:    Some(APPLICATION_NAME.into()),
+            application_version: Some(APPLICATION_VERSION),
+            engine_name:         Some(APPLICATION_NAME.into()),
+            engine_version:      Some(APPLICATION_VERSION),
+        };
 
-		let physical_device = PhysicalDevice::from_index(&instance, physical_idx).unwrap();
+        let required_extensions = Self::get_required_extensions();
 
-		let queue_family = physical_device.queue_families().find(|&q| q.supports_graphics()).unwrap();
-		let features = Features::none();
-		let ext = DeviceExtensions {
-			khr_swapchain: true,
-			.. DeviceExtensions::none()
-		};
+        if ENABLE_VALIDATION_LAYERS && Self::check_validation_layer_support() {
+            Instance::new(Some(&app_info), &required_extensions, VALIDATION_LAYERS.iter().cloned())
+                .expect("failed to create Vulkan instance")
+        } else {
+            Instance::new(Some(&app_info), &required_extensions, None)
+                .expect("failed to create Vulkan instance")
+        }
+    }
 
-		let (device, mut queues) = match Device::new(physical_device, &features, &ext, Some((queue_family, 1.0))) {
-			Ok(device) => device,
-			Err(err)   => panic!("Couldn't build device: {:?}", err)
-		};
+    fn check_validation_layer_support() -> bool {
+        let layers: Vec<_> = layers_list().unwrap().map(|l| l.name().to_owned()).collect();
+        VALIDATION_LAYERS.iter().all(|layer_name| layers.contains(&layer_name.to_string()))
+    }
 
-		let graphics_queue = queues.next().unwrap();
-		let present_queue  = queues.next().unwrap_or_else(|| graphics_queue.clone());
+    fn get_required_extensions() -> InstanceExtensions {
+        let mut extensions = vulkano_win::required_extensions();
+        if ENABLE_VALIDATION_LAYERS {
+            // TODO!: this should be ext_debug_utils (_report is deprecated), but that doesn't exist yet in vulkano
+            extensions.ext_debug_report = true;
+        }
 
-		(device, graphics_queue, present_queue)
+        extensions
+    }
 
-	}
+    fn setup_debug_callback(instance: &Arc<Instance>) -> Option<DebugCallback> {
+        if !ENABLE_VALIDATION_LAYERS  { return None; }
 
-	// TODO: Handle errors and implement way of choosing composite, color format, present mode, etc
-	fn create_swap_chain(
-		surface: &Arc<Surface<Window>>,
-		device: &Arc<Device>,
-		present_queue:  &Arc<Queue>,
-		old_swapchain: Option<Arc<Swapchain<Window>>>,
-	) -> (Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>) {
-		//let physical_device = PhysicalDevice::from_index(physical_idx);
-		let caps = surface.capabilities(device.physical_device()).unwrap();
-		let dimensions = caps.current_extent.unwrap_or([1280, 720]);
-		
-		// Implement safe way of getting buffer count
-		let buffers_count = 2;
+        let msg_types = MessageTypes {
+            error: true,
+            warning: true,
+            performance_warning: true,
+            information: false,
+            debug: true,
+        };
 
-		let transform = caps.current_transform;
-
-		let (format, _color_space) = caps.supported_formats[0];
-
-		let usage = ImageUsage {
-			color_attachment: true,
-			.. ImageUsage::none()
-		};
-
-		let sharing_mode = SharingMode::Exclusive(present_queue.family().id());
-
-		let (swapchain, buffers) = Swapchain::new(
-			device.clone(),
-			surface.clone(),
-			buffers_count,
-			format,
-			dimensions,
-			1,
-			usage,
-			sharing_mode,
-			transform,
-			CompositeAlpha::Opaque,
-			PresentMode::Fifo,
-			true,
-			old_swapchain.as_ref()
-		).unwrap();
-
-		(swapchain, buffers)
-	}
+        DebugCallback::new(&instance, msg_types, |msg| {
+            println!("validation layer: {:?}", msg.description);
+        }).ok()
+    }
 
 
+    // TODO: Allow user to select device
+    fn pick_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface<Window>>) -> usize {
+        PhysicalDevice::enumerate(&instance)
+            .position(|device| Self::is_device_suitable(surface, &device))
+            .expect("failed to find a suitable GPU!")
+    }
 
-	pub fn debug_print(&self) {
-		println!("Instance: {:?}",    self.instance);
-		println!("Physical ID: {:?}", self.physical);
-		println!("Surface: {:?}",     self.surface);
-		println!("Device: {:?}",      self.device);
-		println!("Graphics queue: {:?}", self.graphics_queue);
-		println!("Present queue: {:?}",  self.present_queue);
-	}
-	
+    fn is_device_suitable(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> bool {
+        let indices = Self::find_queue_families(surface, device);
+        let extensions_supported = Self::check_device_extension_support(device);
+
+        let swap_chain_adequate = if extensions_supported {
+                let capabilities = surface.capabilities(*device)
+                    .expect("failed to get surface capabilities");
+                !capabilities.supported_formats.is_empty() &&
+                    capabilities.present_modes.iter().next().is_some()
+            } else {
+                false
+            };
+
+        indices.is_complete() && extensions_supported && swap_chain_adequate
+    }
+
+    fn check_device_extension_support(device: &PhysicalDevice) -> bool {
+        let available_extensions = DeviceExtensions::supported_by_device(*device);
+        let device_extensions = device_extensions();
+        available_extensions.intersection(&device_extensions) == device_extensions
+    }
+
+    fn choose_swap_surface_format(available_formats: &[(Format, ColorSpace)]) -> (Format, ColorSpace) {
+        // NOTE: the 'preferred format' mentioned in the tutorial doesn't seem to be
+        // queryable in Vulkano (no VK_FORMAT_UNDEFINED enum)
+        *available_formats.iter()
+            .find(|(format, color_space)| {
+                *format == Format::B8G8R8A8Unorm && *color_space == ColorSpace::SrgbNonLinear
+            }).unwrap_or_else(|| &available_formats[0])
+    }
+
+    fn choose_swap_present_mode(available_present_modes: SupportedPresentModes) -> PresentMode {
+        if available_present_modes.mailbox {
+            PresentMode::Mailbox
+        } else if available_present_modes.immediate {
+            PresentMode::Immediate
+        } else {
+            PresentMode::Fifo
+        }
+    }
+
+    fn choose_swap_extent(capabilities: &Capabilities) -> [u32; 2] {
+        if let Some(current_extent) = capabilities.current_extent {
+            return current_extent
+        } else {
+            let mut actual_extent = [WIDTH, HEIGHT];
+            actual_extent[0] = capabilities.min_image_extent[0]
+                .max(capabilities.max_image_extent[0].min(actual_extent[0]));
+            actual_extent[1] = capabilities.min_image_extent[1]
+                .max(capabilities.max_image_extent[1].min(actual_extent[1]));
+            actual_extent
+        }
+    }
+
+    fn create_swap_chain(
+        instance: &Arc<Instance>,
+        surface: &Arc<Surface<Window>>,
+        physical_idx: usize,
+        device: &Arc<Device>,
+        graphics_queue: &Arc<Queue>,
+        present_queue: &Arc<Queue>,
+    ) -> (Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>) {
+        let physical_device = PhysicalDevice::from_index(&instance, physical_idx).unwrap();
+        let capabilities = surface.capabilities(physical_device)
+            .expect("failed to get surface capabilities");
+
+        let surface_format = Self::choose_swap_surface_format(&capabilities.supported_formats);
+        let present_mode = Self::choose_swap_present_mode(capabilities.present_modes);
+        let extent = Self::choose_swap_extent(&capabilities);
+
+        let mut image_count = capabilities.min_image_count + 1;
+        if capabilities.max_image_count.is_some() && image_count > capabilities.max_image_count.unwrap() {
+            image_count = capabilities.max_image_count.unwrap();
+        }
+
+        let image_usage = ImageUsage {
+            color_attachment: true,
+            .. ImageUsage::none()
+        };
+
+        let indices = Self::find_queue_families(&surface, &physical_device);
+
+        let sharing: SharingMode = if indices.graphics_family != indices.present_family {
+            vec![graphics_queue, present_queue].as_slice().into()
+        } else {
+            graphics_queue.into()
+        };
+
+        let (swap_chain, images) = Swapchain::new(
+            device.clone(),
+            surface.clone(),
+            image_count,
+            surface_format.0, // TODO: color space?
+            extent,
+            1, // layers
+            image_usage,
+            sharing,
+            capabilities.current_transform,
+            CompositeAlpha::Opaque,
+            present_mode,
+            true, // clipped
+            None,
+        ).expect("failed to create swap chain!");
+
+        (swap_chain, images)
+    }
+
+    fn find_queue_families(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> QueueFamilyIndices {
+        let mut indices = QueueFamilyIndices::new();
+        // TODO: replace index with id to simplify?
+        for (i, queue_family) in device.queue_families().enumerate() {
+            if queue_family.supports_graphics() {
+                indices.graphics_family = i as i32;
+            }
+
+            if surface.is_supported(queue_family).unwrap() {
+                indices.present_family = i as i32;
+            }
+
+            if indices.is_complete() {
+                break;
+            }
+        }
+
+        indices
+    }
+
+    fn create_logical_device(
+        instance: &Arc<Instance>,
+        surface:  &Arc<Surface<Window>>,
+        physical_idx: usize,
+    ) -> (Arc<Device>, Arc<Queue>, Arc<Queue>) {
+        let physical_device = PhysicalDevice::from_index(&instance, physical_idx).unwrap();
+        let indices = Self::find_queue_families(&surface, &physical_device);
+
+        let families = [indices.graphics_family, indices.present_family];
+        use std::iter::FromIterator;
+
+        // Not really sure about this
+        let unique_queue_families: HashSet<&i32> = HashSet::from_iter(families.iter());
+
+        let queue_priority = 1.0;
+        let queue_families = unique_queue_families.iter().map(|i| {
+            (physical_device.queue_families().nth(**i as usize).unwrap(), queue_priority)
+        });
+
+        let (device, mut queues) = Device::new(physical_device, &Features::none(),
+            &device_extensions(), queue_families)
+            .expect("failed to create logical device!");
+
+        let graphics_queue = queues.next().unwrap();
+        let present_queue = queues.next().unwrap_or_else(|| graphics_queue.clone());
+
+        (device, graphics_queue, present_queue)
+    }
+
+    fn create_surface(instance: &Arc<Instance>) -> (EventsLoop, Arc<Surface<Window>>) {
+        let events_loop = EventsLoop::new();
+        let surface = WindowBuilder::new()
+            .with_title(APPLICATION_NAME)
+            .with_dimensions(LogicalSize::new(f64::from(WIDTH), f64::from(HEIGHT)))
+            .build_vk_surface(&events_loop, instance.clone())
+            .expect("failed to create window surface!");
+        (events_loop, surface)
+    }
+
+
+    // ===== Below code is for testing and will be moved =====
+
+
+    fn _create_graphics_pipeline(
+        device: &Arc<Device>,
+        swap_chain_extent: [u32; 2],
+    ) {
+        
+        // Compile the vertex shader
+        mod vertex_shader {
+            vulkano_shaders::shader! {
+                ty: "vertex",
+                path: "src/engine_core/test.vert"
+            }
+        }
+
+        // Compile the fragment shader
+        mod fragment_shader {
+            vulkano_shaders::shader! {
+                ty: "fragment",
+                path: "src/engine_core/test.frag"
+            }
+        }
+
+
+        let vert_shader_module = vertex_shader::Shader::load(device.clone())
+            .expect("Failed to create vertex shader module!");
+        let frag_shader_module = fragment_shader::Shader::load(device.clone())
+            .expect("Failed to create fragment shader module!");
+
+        let dimensions = [swap_chain_extent[0] as f32, swap_chain_extent[1] as f32];
+        let viewport = Viewport {
+            origin: [0.0, 0.0],
+            dimensions,
+            depth_range: 0.0 .. 1.0,
+        };
+
+        let _pipeline_builder = Arc::new(GraphicsPipeline::start()
+            .vertex_input(BufferlessDefinition {})
+            .vertex_shader(vert_shader_module.main_entry_point(), ())
+            .triangle_list()
+            .primitive_restart(false)
+            .viewports(vec![viewport])
+            .fragment_shader(frag_shader_module.main_entry_point(), ())
+            .depth_clamp(false)
+            .polygon_mode_fill()
+            .line_width(1.0)
+            .cull_mode_back()
+            .front_face_clockwise()
+            .blend_pass_through() 
+        );
+    }
+
 }
