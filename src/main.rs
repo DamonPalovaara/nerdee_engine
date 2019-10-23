@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate vulkano;
 extern crate vulkano_win;
 extern crate winit;
@@ -12,7 +13,6 @@ use winit::{WindowEvent, DeviceEvent};
 fn main() {
 	
 	let mut engine_core = EngineCore::new();
-
 	
 	let mut running = true;	
 	while running {
@@ -36,6 +36,6 @@ fn main() {
 			};
 
 		});
-
+		
 	}
 }

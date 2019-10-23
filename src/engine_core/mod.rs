@@ -22,6 +22,8 @@ use winit::{
 
 use vulkano_win::VkSurfaceBuild;
 
+// ================ Vulkano imports ===========================
+
 use vulkano::instance::{
     Instance,
     InstanceExtensions,
@@ -35,7 +37,7 @@ use vulkano::device::{
     Device, 
     DeviceExtensions, 
     Queue, 
-    Features
+    Features,
 };
 use vulkano::swapchain::{
     Surface,
@@ -49,10 +51,16 @@ use vulkano::swapchain::{
 use vulkano::format::Format;
 use vulkano::image::{ImageUsage, swapchain::SwapchainImage};
 use vulkano::sync::SharingMode;
+use vulkano::framebuffer::{
+    RenderPassAbstract,
+    Subpass,
+};
+use vulkano::descriptor::PipelineLayoutAbstract;
+
+// ================ End Vulkano imports ===========================
 
 
-// ===== Constants =====
-// TODO: Extract constants from file and/or launcher
+// ========= Constants ==========
 
 
 const APPLICATION_NAME:    &str    = "NerDee Engine";
@@ -68,14 +76,21 @@ const ENABLE_VALIDATION_LAYERS: bool = true;
 const ENABLE_VALIDATION_LAYERS: bool = false;
 
 
-// ===== End constants =====
+// ========== End constants ==========
+
+
+type ConcreteGraphicsPipeline = GraphicsPipeline<
+    BufferlessDefinition,
+    Box<dyn PipelineLayoutAbstract + Send + Sync + 'static>, 
+    Arc<dyn RenderPassAbstract + Send + Sync + 'static>
+>;
 
 
 
-// ===== Utility structs =====
+// ========== Utility structs ==========
 
 
-// Required device extensions
+// Required device extensions (should this be a const)
 fn device_extensions() -> DeviceExtensions {
     DeviceExtensions {
         khr_swapchain: true,
@@ -99,17 +114,17 @@ impl QueueFamilyIndices {
 }
 
 
-// ===== End utility structs ===== 
+// ========= End utility structs ==========
 
 
-// The main struct
+// ========== Main struct ==========
 pub struct EngineCore {
 
     instance:       Arc<Instance>,
     debug_callback: Option<DebugCallback>,
 
     pub events_loop: EventsLoop,
-    surface:     Arc<Surface<Window>>,
+    surface:         Arc<Surface<Window>>,
 
     physical_idx: usize,
     device:       Arc<Device>,
@@ -119,6 +134,9 @@ pub struct EngineCore {
 
     swap_chain:        Arc<Swapchain<Window>>,
     swap_chain_images: Vec<Arc<SwapchainImage<Window>>>,
+
+    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    graphics_pipeline: Arc<ConcreteGraphicsPipeline>,
 
 }
 
@@ -131,8 +149,9 @@ impl EngineCore {
         let (events_loop, surface) = Self::create_surface(&instance);
 
         let physical_idx = Self::pick_physical_device(&instance, &surface);
-        let (device, graphics_queue, present_queue) = Self::create_logical_device(
-            &instance, &surface, physical_idx);
+        let (device, graphics_queue, present_queue) = {
+            Self::create_logical_device(&instance, &surface, physical_idx)
+        };
 
         let (swap_chain, swap_chain_images) = Self::create_swap_chain(
             &instance, 
@@ -143,6 +162,8 @@ impl EngineCore {
             &present_queue
         );
 
+        let render_pass = Self::create_render_pass(&device, swap_chain.format());
+        let graphics_pipeline = Self::create_graphics_pipeline(&device, swap_chain.dimensions(), &render_pass);
         Self {
             instance,
             debug_callback,
@@ -158,6 +179,9 @@ impl EngineCore {
 
             swap_chain,
             swap_chain_images,
+
+            render_pass,
+            graphics_pipeline,
         }
     }
 
@@ -249,6 +273,8 @@ impl EngineCore {
         available_extensions.intersection(&device_extensions) == device_extensions
     }
 
+    // ===================== Swap-chain Creation ==========================================
+
     fn choose_swap_surface_format(available_formats: &[(Format, ColorSpace)]) -> (Format, ColorSpace) {
         // NOTE: the 'preferred format' mentioned in the tutorial doesn't seem to be
         // queryable in Vulkano (no VK_FORMAT_UNDEFINED enum)
@@ -334,6 +360,8 @@ impl EngineCore {
         (swap_chain, images)
     }
 
+    // ===================== End Swap-chain Creation ==========================================
+
     fn find_queue_families(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> QueueFamilyIndices {
         let mut indices = QueueFamilyIndices::new();
         // TODO: replace index with id to simplify?
@@ -397,10 +425,11 @@ impl EngineCore {
     // ===== Below code is for testing and will be moved =====
 
 
-    fn _create_graphics_pipeline(
+    fn create_graphics_pipeline(
         device: &Arc<Device>,
         swap_chain_extent: [u32; 2],
-    ) {
+        render_pass: &Arc<dyn RenderPassAbstract + Send + Sync>,
+    ) -> Arc<ConcreteGraphicsPipeline> {
         
         // Compile the vertex shader
         mod vertex_shader {
@@ -431,7 +460,7 @@ impl EngineCore {
             depth_range: 0.0 .. 1.0,
         };
 
-        let _pipeline_builder = Arc::new(GraphicsPipeline::start()
+        Arc::new(GraphicsPipeline::start()
             .vertex_input(BufferlessDefinition {})
             .vertex_shader(vert_shader_module.main_entry_point(), ())
             .triangle_list()
@@ -443,8 +472,36 @@ impl EngineCore {
             .line_width(1.0)
             .cull_mode_back()
             .front_face_clockwise()
-            .blend_pass_through() 
-        );
+            .blend_pass_through()
+            .render_pass( Subpass::from( render_pass.clone(), 0 ).unwrap() )
+            .build(device.clone()).unwrap()
+        )
     }
 
+    fn create_render_pass(device: &Arc<Device>, color_format: Format) -> Arc<dyn RenderPassAbstract + Send + Sync> {
+        Arc::new(
+            single_pass_renderpass!(
+                device.clone(),
+                attachments: {
+                    color: {
+                        load: Clear,
+                        store: Store,
+                        format: color_format,
+                        samples: 1,
+                    }
+                },
+                pass: {
+                    color: [color],
+                    depth_stencil: {}
+                }
+            ).unwrap()
+        )
+    }
+
+}
+
+impl Drop for EngineCore {
+    fn drop(&mut self) {
+        println!("EngineCore destructor called!");
+    }
 }
