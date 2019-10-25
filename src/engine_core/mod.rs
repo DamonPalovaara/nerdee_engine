@@ -1,11 +1,6 @@
 // Most of this code comes from the tutorial found at github.com/bwasty/vulkan-tutorial-rs
 // The tutorial is based off of the official tutorial found at vulkan-tutorial.com
 
-use vulkano::pipeline::{
-    viewport::Viewport,
-    vertex::BufferlessDefinition,
-    GraphicsPipeline,
-};
 use std::sync::Arc;
 use std::collections::HashSet;
 
@@ -23,7 +18,12 @@ use winit::{
 use vulkano_win::VkSurfaceBuild;
 
 // ================ Vulkano imports ===========================
-
+use vulkano::pipeline::{
+    GraphicsPipeline,
+    vertex::BufferlessDefinition,
+    vertex::BufferlessVertices,
+    viewport::Viewport,    
+};
 use vulkano::instance::{
     Instance,
     InstanceExtensions,
@@ -47,22 +47,26 @@ use vulkano::swapchain::{
     PresentMode,
     Swapchain,
     CompositeAlpha,
+    acquire_next_image,
 };
 use vulkano::format::Format;
 use vulkano::image::{ImageUsage, swapchain::SwapchainImage};
-use vulkano::sync::SharingMode;
+use vulkano::sync::{SharingMode, GpuFuture};
 use vulkano::framebuffer::{
     RenderPassAbstract,
     Subpass,
+    FramebufferAbstract,
+    Framebuffer,
 };
 use vulkano::descriptor::PipelineLayoutAbstract;
+use vulkano::command_buffer::{
+    AutoCommandBuffer,
+    AutoCommandBufferBuilder,
+    DynamicState,
+};
 
-// ================ End Vulkano imports ===========================
 
-
-// ========= Constants ==========
-
-
+// ====================== Constants ========================
 const APPLICATION_NAME:    &str    = "NerDee Engine";
 const APPLICATION_VERSION: Version = Version{ major: 0, minor: 1, patch: 0 };
 const WIDTH:  u32 = 800;
@@ -76,9 +80,6 @@ const ENABLE_VALIDATION_LAYERS: bool = true;
 const ENABLE_VALIDATION_LAYERS: bool = false;
 
 
-// ========== End constants ==========
-
-
 type ConcreteGraphicsPipeline = GraphicsPipeline<
     BufferlessDefinition,
     Box<dyn PipelineLayoutAbstract + Send + Sync + 'static>, 
@@ -87,9 +88,7 @@ type ConcreteGraphicsPipeline = GraphicsPipeline<
 
 
 
-// ========== Utility structs ==========
-
-
+// ================== Utility structs ===================
 // Required device extensions (should this be a const)
 fn device_extensions() -> DeviceExtensions {
     DeviceExtensions {
@@ -114,29 +113,23 @@ impl QueueFamilyIndices {
 }
 
 
-// ========= End utility structs ==========
-
-
 // ========== Main struct ==========
 pub struct EngineCore {
 
-    instance:       Arc<Instance>,
+    instance: Arc<Instance>,
     debug_callback: Option<DebugCallback>,
-
-    pub events_loop: EventsLoop,
-    surface:         Arc<Surface<Window>>,
-
+    events_loop: EventsLoop,
+    surface: Arc<Surface<Window>>,
     physical_idx: usize,
-    device:       Arc<Device>,
-
+    device: Arc<Device>,
     graphics_queue: Arc<Queue>,
-    present_queue:  Arc<Queue>,
-
-    swap_chain:        Arc<Swapchain<Window>>,
+    present_queue: Arc<Queue>,
+    swap_chain: Arc<Swapchain<Window>>,
     swap_chain_images: Vec<Arc<SwapchainImage<Window>>>,
-
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     graphics_pipeline: Arc<ConcreteGraphicsPipeline>,
+    swap_chain_framebuffers: Vec<Arc<dyn FramebufferAbstract + Send + Sync>>,
+    command_buffers: Vec<Arc<AutoCommandBuffer>>,
 
 }
 
@@ -164,25 +157,29 @@ impl EngineCore {
 
         let render_pass = Self::create_render_pass(&device, swap_chain.format());
         let graphics_pipeline = Self::create_graphics_pipeline(&device, swap_chain.dimensions(), &render_pass);
-        Self {
+        let swap_chain_framebuffers = Self::create_framebuffers(&swap_chain_images, &render_pass);
+
+        let mut app = Self {
+
             instance,
             debug_callback,
-
             events_loop,
             surface,
-
             physical_idx,
             device,
-
             graphics_queue,
             present_queue,
-
             swap_chain,
             swap_chain_images,
-
             render_pass,
             graphics_pipeline,
-        }
+            swap_chain_framebuffers,
+            command_buffers: vec![],
+
+        };
+
+        app.create_command_buffers();
+        app
     }
 
     fn create_instance() -> Arc<Instance> {
@@ -496,6 +493,83 @@ impl EngineCore {
                 }
             ).unwrap()
         )
+    }
+
+    fn create_framebuffers(
+        swap_chain_images: &[Arc<SwapchainImage<Window>>],
+        render_pass: &Arc<dyn RenderPassAbstract + Send + Sync>
+    ) -> Vec<Arc<dyn FramebufferAbstract + Send + Sync>> {
+        swap_chain_images.iter().map(|image| {
+            let fba: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(
+                Framebuffer::start(render_pass.clone())
+                    .add(image.clone()).unwrap()
+                    .build().unwrap()
+            );
+            fba
+        }).collect::<Vec<_>>()
+    }
+
+    fn create_command_buffers(&mut self) {
+        let queue_family = self.graphics_queue.family();
+        self.command_buffers = self.swap_chain_framebuffers.iter().map(|framebuffer| {
+            let vertices = BufferlessVertices { vertices: 3, instances: 1 };
+            Arc::new(AutoCommandBufferBuilder::primary_simultaneous_use(self.device.clone(), queue_family)
+                .unwrap()
+                .begin_render_pass(framebuffer.clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()])
+                .unwrap()
+                .draw(self.graphics_pipeline.clone(), &DynamicState::none(), vertices, (), ())
+                .unwrap()
+                .end_render_pass()
+                .unwrap()
+                .build()
+                .unwrap()
+            )
+        }).collect();
+    }
+
+    fn draw(&mut self) {
+        let (image_index, acquire_future) = acquire_next_image(self.swap_chain.clone(), None).unwrap();
+
+        let command_buffer = self.command_buffers[image_index].clone();
+
+        let future = acquire_future
+            .then_execute(self.graphics_queue.clone(), command_buffer)
+            .unwrap()
+            .then_swapchain_present(self.present_queue.clone(), self.swap_chain.clone(), image_index)
+            .then_signal_fence_and_flush()
+            .unwrap();
+        
+        future.wait(None).unwrap();
+    }
+
+    pub fn run_forever(&mut self) {
+
+        let mut running = true;	
+        while running {
+
+            self.draw();
+            
+            self.events_loop.poll_events( |event| {
+
+                match event {
+
+                    winit::Event::WindowEvent { event, .. } => match event {
+                        WindowEvent::CloseRequested => running = false,
+                        _ => ()
+                    },
+
+                    winit::Event::DeviceEvent { event, .. } => match event {
+                        DeviceEvent::MouseMotion{ delta } => println!("{:?}", delta),
+                        _ => (),
+                    },
+
+                    _ => (),
+
+                };
+
+            });
+            
+        }
     }
 
 }
