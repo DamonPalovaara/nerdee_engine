@@ -64,6 +64,10 @@ use vulkano::command_buffer::{
     AutoCommandBufferBuilder,
     DynamicState,
 };
+use vulkano::buffer::{
+    CpuAccessibleBuffer,
+    BufferUsage,
+};
 
 
 // ====================== Constants ========================
@@ -112,24 +116,33 @@ impl QueueFamilyIndices {
     }
 }
 
+#[derive(Copy, Clone)]
+struct UniformBufferObject {
+    time: u64,
+    resolution: [f32; 2],
+}
 
-// ========== Main struct ==========
+
+
+
+// ========== Main struct ===========
 pub struct EngineCore {
 
-    instance: Arc<Instance>,
-    debug_callback: Option<DebugCallback>,
-    events_loop: EventsLoop,
-    surface: Arc<Surface<Window>>,
-    physical_idx: usize,
-    device: Arc<Device>,
-    graphics_queue: Arc<Queue>,
-    present_queue: Arc<Queue>,
-    swap_chain: Arc<Swapchain<Window>>,
-    swap_chain_images: Vec<Arc<SwapchainImage<Window>>>,
-    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
-    graphics_pipeline: Arc<ConcreteGraphicsPipeline>,
+    instance:                Arc<Instance>,
+    debug_callback:          Option<DebugCallback>,
+    events_loop:             EventsLoop,
+    surface:                 Arc<Surface<Window>>,
+    physical_idx:            usize,
+    device:                  Arc<Device>,
+    graphics_queue:          Arc<Queue>,
+    present_queue:           Arc<Queue>,
+    swap_chain:              Arc<Swapchain<Window>>,
+    swap_chain_images:       Vec<Arc<SwapchainImage<Window>>>,
+    render_pass:             Arc<dyn RenderPassAbstract + Send + Sync>,
+    graphics_pipeline:       Arc<ConcreteGraphicsPipeline>,
     swap_chain_framebuffers: Vec<Arc<dyn FramebufferAbstract + Send + Sync>>,
-    command_buffers: Vec<Arc<AutoCommandBuffer>>,
+    command_buffers:         Vec<Arc<AutoCommandBuffer>>,
+    uniform_buffers:         Vec<Arc<CpuAccessibleBuffer<UniformBufferObject>>>,
 
 }
 
@@ -159,6 +172,12 @@ impl EngineCore {
         let graphics_pipeline = Self::create_graphics_pipeline(&device, swap_chain.dimensions(), &render_pass);
         let swap_chain_framebuffers = Self::create_framebuffers(&swap_chain_images, &render_pass);
 
+        let uniform_buffers = Self::create_uniform_buffers(
+            &device, 
+            swap_chain_images.len(), 
+            swap_chain.dimensions()
+        );
+
         let mut app = Self {
 
             instance,
@@ -175,6 +194,7 @@ impl EngineCore {
             graphics_pipeline,
             swap_chain_framebuffers,
             command_buffers: vec![],
+            uniform_buffers,
 
         };
 
@@ -305,12 +325,12 @@ impl EngineCore {
     }
 
     fn create_swap_chain(
-        instance: &Arc<Instance>,
-        surface: &Arc<Surface<Window>>,
-        physical_idx: usize,
-        device: &Arc<Device>,
+        instance:       &Arc<Instance>,
+        surface:        &Arc<Surface<Window>>,
+        physical_idx:   usize,
+        device:         &Arc<Device>,
         graphics_queue: &Arc<Queue>,
-        present_queue: &Arc<Queue>,
+        present_queue:  &Arc<Queue>,
     ) -> (Arc<Swapchain<Window>>, Vec<Arc<SwapchainImage<Window>>>) {
         let physical_device = PhysicalDevice::from_index(&instance, physical_idx).unwrap();
         let capabilities = surface.capabilities(physical_device)
@@ -415,17 +435,18 @@ impl EngineCore {
             .with_dimensions(LogicalSize::new(f64::from(WIDTH), f64::from(HEIGHT)))
             .build_vk_surface(&events_loop, instance.clone())
             .expect("failed to create window surface!");
+        println!("DPI scale factor: {:?}", surface.window().get_hidpi_factor());
         (events_loop, surface)
     }
 
 
-    // ===== Below code is for testing and will be moved =====
+    // ============== Setup graphics pipeline then draw ===========================
 
 
     fn create_graphics_pipeline(
-        device: &Arc<Device>,
+        device:            &Arc<Device>,
         swap_chain_extent: [u32; 2],
-        render_pass: &Arc<dyn RenderPassAbstract + Send + Sync>,
+        render_pass:       &Arc<dyn RenderPassAbstract + Send + Sync>,
     ) -> Arc<ConcreteGraphicsPipeline> {
         
         // Compile the vertex shader
@@ -451,6 +472,7 @@ impl EngineCore {
             .expect("Failed to create fragment shader module!");
 
         let dimensions = [swap_chain_extent[0] as f32, swap_chain_extent[1] as f32];
+        println!("Dimensions: {:?}", dimensions);
         let viewport = Viewport {
             origin: [0.0, 0.0],
             dimensions,
@@ -460,7 +482,7 @@ impl EngineCore {
         Arc::new(GraphicsPipeline::start()
             .vertex_input(BufferlessDefinition {})
             .vertex_shader(vert_shader_module.main_entry_point(), ())
-            .triangle_list()
+            .triangle_strip()
             .primitive_restart(false)
             .viewports(vec![viewport])
             .fragment_shader(frag_shader_module.main_entry_point(), ())
@@ -475,7 +497,10 @@ impl EngineCore {
         )
     }
 
-    fn create_render_pass(device: &Arc<Device>, color_format: Format) -> Arc<dyn RenderPassAbstract + Send + Sync> {
+    fn create_render_pass(
+        device:       &Arc<Device>, 
+        color_format: Format
+    ) -> Arc<dyn RenderPassAbstract + Send + Sync> {
         Arc::new(
             single_pass_renderpass!(
                 device.clone(),
@@ -497,7 +522,7 @@ impl EngineCore {
 
     fn create_framebuffers(
         swap_chain_images: &[Arc<SwapchainImage<Window>>],
-        render_pass: &Arc<dyn RenderPassAbstract + Send + Sync>
+        render_pass:       &Arc<dyn RenderPassAbstract + Send + Sync>
     ) -> Vec<Arc<dyn FramebufferAbstract + Send + Sync>> {
         swap_chain_images.iter().map(|image| {
             let fba: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(
@@ -511,20 +536,48 @@ impl EngineCore {
 
     fn create_command_buffers(&mut self) {
         let queue_family = self.graphics_queue.family();
-        self.command_buffers = self.swap_chain_framebuffers.iter().map(|framebuffer| {
-            let vertices = BufferlessVertices { vertices: 3, instances: 1 };
-            Arc::new(AutoCommandBufferBuilder::primary_simultaneous_use(self.device.clone(), queue_family)
-                .unwrap()
-                .begin_render_pass(framebuffer.clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()])
-                .unwrap()
-                .draw(self.graphics_pipeline.clone(), &DynamicState::none(), vertices, (), ())
-                .unwrap()
-                .end_render_pass()
-                .unwrap()
-                .build()
-                .unwrap()
+        
+        self.command_buffers = self.swap_chain_framebuffers.iter().map( |framebuffer| {
+            let vertices = BufferlessVertices { vertices: 4, instances: 1 };
+            Arc::new(
+                AutoCommandBufferBuilder::primary_simultaneous_use(self.device.clone(), queue_family).unwrap()
+                    .begin_render_pass(framebuffer.clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap()
+                    .draw(
+                        self.graphics_pipeline.clone(), 
+                        &DynamicState::none(), 
+                        vertices, 
+                        self.uniform_buffers,
+                        ()
+                    ).unwrap()
+                    .end_render_pass().unwrap()
+                    .build().unwrap()
             )
         }).collect();
+    }
+
+    fn update_uniform_buffer(resolution: [f32; 2]) -> UniformBufferObject {
+        UniformBufferObject {
+            time: 0,
+            resolution,
+        }
+    }
+
+    fn create_uniform_buffers(
+        device: &Arc<Device>,
+        num_buffers: usize,
+        resolution_u32: [u32; 2]
+    ) -> Vec<Arc<CpuAccessibleBuffer<UniformBufferObject>>> {
+        //let mut buffers = Vec::new();
+        let resolution = [resolution_u32[0] as f32, resolution_u32[1] as f32];
+        let uniform_buffer = Self::update_uniform_buffer(resolution);
+
+        (0..num_buffers).map(|_| {
+            CpuAccessibleBuffer::from_data(
+                device.clone(),
+                BufferUsage::uniform_buffer_transfer_destination(),
+                uniform_buffer
+            ).unwrap()
+        }).collect()
     }
 
     fn draw(&mut self) {
@@ -544,11 +597,16 @@ impl EngineCore {
 
     pub fn run_forever(&mut self) {
 
+        //self.draw();
+
         let mut running = true;	
         while running {
 
+            // future.wait(None).unwrap();
             self.draw();
-            
+            //self.update();
+
+            // Handle events
             self.events_loop.poll_events( |event| {
 
                 match event {
@@ -559,7 +617,7 @@ impl EngineCore {
                     },
 
                     winit::Event::DeviceEvent { event, .. } => match event {
-                        DeviceEvent::MouseMotion{ delta } => println!("{:?}", delta),
+                        //DeviceEvent::MouseMotion{ delta } => println!("{:?}", delta),
                         _ => (),
                     },
 
@@ -570,6 +628,11 @@ impl EngineCore {
             });
             
         }
+    }
+
+    fn _hack_for_recompile() {
+        include_bytes!("test.frag");
+        include_bytes!("test.vert");
     }
 
 }
