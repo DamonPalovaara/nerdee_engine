@@ -1,5 +1,7 @@
-// Most of this code comes from the tutorial found at github.com/bwasty/vulkan-tutorial-rs
-// The tutorial is based off of the official tutorial found at vulkan-tutorial.com
+/*
+Most of this code comes from the tutorial found at github.com/bwasty/vulkan-tutorial-rs
+The tutorial is based off of the official tutorial found at vulkan-tutorial.com
+*/
 
 use std::sync::Arc;
 use std::collections::HashSet;
@@ -68,13 +70,14 @@ use vulkano::buffer::{
     CpuAccessibleBuffer,
     BufferUsage,
 };
+use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 
 
 // ====================== Constants ========================
 const APPLICATION_NAME:    &str    = "NerDee Engine";
 const APPLICATION_VERSION: Version = Version{ major: 0, minor: 1, patch: 0 };
-const WIDTH:  u32 = 800;
-const HEIGHT: u32 = 600;
+const WIDTH:  u32 = 1600;
+const HEIGHT: u32 = 900;
 
 const VALIDATION_LAYERS: &[&str] =  &[ "VK_LAYER_LUNARG_standard_validation" ];
 
@@ -89,8 +92,6 @@ type ConcreteGraphicsPipeline = GraphicsPipeline<
     Box<dyn PipelineLayoutAbstract + Send + Sync + 'static>, 
     Arc<dyn RenderPassAbstract + Send + Sync + 'static>
 >;
-
-
 
 // ================== Utility structs ===================
 // Required device extensions (should this be a const)
@@ -116,10 +117,12 @@ impl QueueFamilyIndices {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
 struct UniformBufferObject {
-    time: u64,
-    resolution: [f32; 2],
+    time:   f32,
+    width:  f32,
+    height: f32,
 }
 
 
@@ -142,7 +145,6 @@ pub struct EngineCore {
     graphics_pipeline:       Arc<ConcreteGraphicsPipeline>,
     swap_chain_framebuffers: Vec<Arc<dyn FramebufferAbstract + Send + Sync>>,
     command_buffers:         Vec<Arc<AutoCommandBuffer>>,
-    uniform_buffers:         Vec<Arc<CpuAccessibleBuffer<UniformBufferObject>>>,
 
 }
 
@@ -172,12 +174,6 @@ impl EngineCore {
         let graphics_pipeline = Self::create_graphics_pipeline(&device, swap_chain.dimensions(), &render_pass);
         let swap_chain_framebuffers = Self::create_framebuffers(&swap_chain_images, &render_pass);
 
-        let uniform_buffers = Self::create_uniform_buffers(
-            &device, 
-            swap_chain_images.len(), 
-            swap_chain.dimensions()
-        );
-
         let mut app = Self {
 
             instance,
@@ -194,7 +190,6 @@ impl EngineCore {
             graphics_pipeline,
             swap_chain_framebuffers,
             command_buffers: vec![],
-            uniform_buffers,
 
         };
 
@@ -293,8 +288,6 @@ impl EngineCore {
     // ===================== Swap-chain Creation ==========================================
 
     fn choose_swap_surface_format(available_formats: &[(Format, ColorSpace)]) -> (Format, ColorSpace) {
-        // NOTE: the 'preferred format' mentioned in the tutorial doesn't seem to be
-        // queryable in Vulkano (no VK_FORMAT_UNDEFINED enum)
         *available_formats.iter()
             .find(|(format, color_space)| {
                 *format == Format::B8G8R8A8Unorm && *color_space == ColorSpace::SrgbNonLinear
@@ -376,8 +369,6 @@ impl EngineCore {
 
         (swap_chain, images)
     }
-
-    // ===================== End Swap-chain Creation ==========================================
 
     fn find_queue_families(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> QueueFamilyIndices {
         let mut indices = QueueFamilyIndices::new();
@@ -465,7 +456,6 @@ impl EngineCore {
             }
         }
 
-
         let vert_shader_module = vertex_shader::Shader::load(device.clone())
             .expect("Failed to create vertex shader module!");
         let frag_shader_module = fragment_shader::Shader::load(device.clone())
@@ -536,6 +526,22 @@ impl EngineCore {
 
     fn create_command_buffers(&mut self) {
         let queue_family = self.graphics_queue.family();
+
+        let data = CpuAccessibleBuffer::from_data(
+            self.device.clone(),
+            BufferUsage::all(),
+            UniformBufferObject {
+                time: 1.0,
+                width:  self.swap_chain.dimensions()[0] as f32,
+                height: self.swap_chain.dimensions()[1] as f32
+            }
+        ).unwrap();
+
+        let set = Arc::new(
+            PersistentDescriptorSet::start(self.graphics_pipeline.clone(), 0)
+                .add_buffer(data.clone()).unwrap()
+                .build().unwrap()
+        );
         
         self.command_buffers = self.swap_chain_framebuffers.iter().map( |framebuffer| {
             let vertices = BufferlessVertices { vertices: 4, instances: 1 };
@@ -546,7 +552,7 @@ impl EngineCore {
                         self.graphics_pipeline.clone(), 
                         &DynamicState::none(), 
                         vertices, 
-                        self.uniform_buffers,
+                        set.clone(),
                         ()
                     ).unwrap()
                     .end_render_pass().unwrap()
@@ -555,31 +561,7 @@ impl EngineCore {
         }).collect();
     }
 
-    fn update_uniform_buffer(resolution: [f32; 2]) -> UniformBufferObject {
-        UniformBufferObject {
-            time: 0,
-            resolution,
-        }
-    }
-
-    fn create_uniform_buffers(
-        device: &Arc<Device>,
-        num_buffers: usize,
-        resolution_u32: [u32; 2]
-    ) -> Vec<Arc<CpuAccessibleBuffer<UniformBufferObject>>> {
-        //let mut buffers = Vec::new();
-        let resolution = [resolution_u32[0] as f32, resolution_u32[1] as f32];
-        let uniform_buffer = Self::update_uniform_buffer(resolution);
-
-        (0..num_buffers).map(|_| {
-            CpuAccessibleBuffer::from_data(
-                device.clone(),
-                BufferUsage::uniform_buffer_transfer_destination(),
-                uniform_buffer
-            ).unwrap()
-        }).collect()
-    }
-
+    
     fn draw(&mut self) {
         let (image_index, acquire_future) = acquire_next_image(self.swap_chain.clone(), None).unwrap();
 

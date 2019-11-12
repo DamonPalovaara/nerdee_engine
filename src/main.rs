@@ -10,8 +10,6 @@ mod engine_core;
 use engine_core::EngineCore;
 
 fn main() {
-	
-	
 	let mut engine_core = EngineCore::new();
 	engine_core.run_forever();
 }

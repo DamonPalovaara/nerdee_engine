@@ -6,8 +6,15 @@
 out gl_PerVertex {
 	vec4 gl_Position;
 };
+layout(location = 0) out float time;
+layout(location = 1) out float width;
+layout(location = 2) out float height;
 
-layout(location = 0) out vec3 fragColor;
+layout(set = 0, binding = 0) uniform Data {
+	float time;
+	float width;
+	float height;
+} uniforms;
 
 vec2 positions[4] = vec2[](
 	vec2( -1.0,  1.0 ),
@@ -16,14 +23,9 @@ vec2 positions[4] = vec2[](
 	vec2(  1.0, -1.0 )
 );
 
-vec3 colors[4] = vec3[](
-	vec3( 1.0, 0.0, 0.0 ),
-	vec3( 1.0, 1.0, 1.0 ),
-	vec3( 1.0, 0.0, 0.0 ),
-	vec3( 1.0, 0.0, 0.0 )
-);
-
 void main() {
 	gl_Position = vec4( positions[gl_VertexIndex], 0.0, 1.0 );
-	fragColor = colors[gl_VertexIndex];
+	time = uniforms.time;
+	width = uniforms.width;
+	height = uniforms.height;
 }

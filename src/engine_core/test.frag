@@ -3,30 +3,29 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(location = 0) in vec3 fragColor;
+layout(location = 0) in float time;
+layout(location = 1) in float width;
+layout(location = 2) in float height;
 
 layout(location = 0) out vec4 outColor;
 
-// TODO: make uniform
-vec2 resolution = vec2(800.0, 600.0);
-
-float zoom_1   = 2.0;
+float zoom_1   = 3.0;
 vec2  center_1 = vec2(0.0, 0.0);
 float zoom_2   = 0.05;
 vec2  center_2 = vec2(0.37, 0.1);
 
-float blend = 0.0;
+float blend = 1.0;
 float zoom   = mix(zoom_1,   zoom_2,   blend);
 vec2  center = mix(center_1, center_2, blend);
 
 void main() {
     // Make screen go from [-0.5, -0.5] in up-left to [0.5, 0.5] in low-right
-    vec2 norm_coordinates = ( (gl_FragCoord.xy - 0.5) / resolution );
+    vec2 norm_coordinates = ( (gl_FragCoord.xy - 0.5) / vec2(width, height) );
     norm_coordinates -= 0.5;
 
     // Fix aspect ratio
-    norm_coordinates.x *= min( 1.0 , resolution.x / resolution.y);
-    norm_coordinates.y *= min( 1.0 , resolution.y / resolution.x);
+    norm_coordinates.x *= min( 1.0 , width / height);
+    norm_coordinates.y *= min( 1.0 , height / width);
 
     norm_coordinates *= zoom;
     norm_coordinates += center;
@@ -59,7 +58,5 @@ void main() {
         output_color = mix(color_1, color_2, i);
     }
 
-    outColor = vec4(output_color, 1.0);
-    //outColor = vec4(vec3(i), 1.0);
-	
+    outColor= vec4(output_color, 1.0);
 }
