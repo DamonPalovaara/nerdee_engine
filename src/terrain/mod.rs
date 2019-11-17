@@ -23,7 +23,7 @@ impl Terrain {
 
     pub fn write(&self) {
         for i in 0..self.chunks.len() {
-            self.chunks[i].write();
+            self.chunks[i].write().unwrap();
         }
     }
 }
@@ -39,7 +39,7 @@ impl Chunk {
 
         for y in 0..size {
             for x in 0..size {
-                points.push(noise.get([x as f64, y as f64]));
+                points.push(noise.get([x as f64 * 0.1, y as f64 * 0.1]));
             }
         }
 
@@ -67,8 +67,8 @@ impl Chunk {
         let mut buffer = "".to_string();
         for i in 0..(self.size * self.size) {
             buffer.push_str(&format!(
-                "v {:.2}, {:.2}, {:.2}\n",
-                0.0, 0.0, self.points[i]
+                "v {} {} {}\n",
+                (i % self.size) as f32 * 0.5, self.points[i] * 10.0, (i / self.size) as f32 * 0.5
             ));
         }
         file.write(buffer.as_bytes())?;
