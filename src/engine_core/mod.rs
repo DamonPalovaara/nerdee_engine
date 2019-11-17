@@ -612,6 +612,8 @@ impl EngineCore {
         }
     }
 
+    // This method makes sure that the shaders get recompiled when they are edited
+    #[cfg(build = "debug")]
     fn _hack_for_recompile() {
         include_bytes!("test.frag");
         include_bytes!("test.vert");
