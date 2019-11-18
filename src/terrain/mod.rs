@@ -81,9 +81,6 @@ impl Chunk {
             ));
         }
 
-        file.write(buffer.as_bytes())?;
-        buffer = "".to_string();
-
         // Write the faces
         for y in 0..self.size - 1 {
             for x in 1..self.size {
