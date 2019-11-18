@@ -17,7 +17,7 @@ use time::{Duration, PreciseTime};
 
 fn main() {
 	let start = PreciseTime::now();
-	let terrain = Terrain::new(100);
+	let terrain = Terrain::new(1000);
 	terrain.write();
 	println!("{}", start.to(PreciseTime::now()).num_seconds())
 }

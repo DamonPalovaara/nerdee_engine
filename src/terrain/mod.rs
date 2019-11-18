@@ -39,7 +39,12 @@ impl Chunk {
 
         for y in 0..size {
             for x in 0..size {
-                points.push(noise.get([x as f64 * 0.1, y as f64 * 0.1]));
+                points.push(
+                    noise.get([x as f64 * 0.050, y as f64 * 0.050]) * 0.5 +
+                    noise.get([x as f64 * 0.020, y as f64 * 0.020]) * 1.0 +
+                    noise.get([x as f64 * 0.010, y as f64 * 0.010]) * 2.0 + 
+                    noise.get([x as f64 * 0.005, y as f64 * 0.005]) * 4.0 
+                );
             }
         }
 
@@ -65,12 +70,31 @@ impl Chunk {
     fn write(&self) -> std::io::Result<()> {
         let mut file = File::create("chunk.obj")?;
         let mut buffer = "".to_string();
+
+        // Write out the vertices
         for i in 0..(self.size * self.size) {
             buffer.push_str(&format!(
                 "v {} {} {}\n",
-                (i % self.size) as f32 * 0.5, self.points[i] * 10.0, (i / self.size) as f32 * 0.5
+                (i % self.size) as f32 * 1.0, 
+                self.points[i] * 30.0, 
+                (i / self.size) as f32 * 1.0
             ));
         }
+
+        file.write(buffer.as_bytes())?;
+        buffer = "".to_string();
+
+        // Write the faces
+        for y in 0..self.size - 1 {
+            for x in 1..self.size {
+                buffer.push_str(&format!(
+                    "f {} {} {}\nf {} {} {}\n",
+                    x +     (y * self.size), x + self.size + (y * self.size), x +             1 + (y * self.size),
+                    x + 1 + (y * self.size), x + self.size + (y * self.size), x + self.size + 1 + (y * self.size)
+                ));
+            }
+        }
+
         file.write(buffer.as_bytes())?;
         Ok(())
     }
