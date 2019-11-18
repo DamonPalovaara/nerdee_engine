@@ -1,7 +1,14 @@
-At this point I'm just messing around with shaders.  
-Before I get too far I want to port over to using gfx-hal (docs.rs/gfx-hal/0.4.0/gfx_hal/)  
-Reasons for porting:
-* Weak community support
-* In-complete documentation
-* Hard to get help due to last two items
-* gfx_hal supports multiple apis/platforms including wasm
+My objective is to create an engine that implements a procedural terrain generator that is tera-formable
+
+What I have working so far:
+* Basic Vulkan instance via Vulkano crate
+* Basic terrain generator using multiple octaves of simplex noise
+* .obj exporter for the generated terrain
+
+What changes I want to make:
+* I want to switch to using gfx-hal or rendy (high-level gfx-hal)
+
+Future goals:
+* Implement way to generate normals for the terrain
+* Figure out way to "voxelize" terrain
+* Figure out way to shape terrain into a planet
