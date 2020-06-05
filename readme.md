@@ -15,7 +15,7 @@ cargo run
 To view documentation run the following command in the repository folder
 
 ```bash
-Cargo doc --open
+cargo doc --open
 ```
 
 ## Contributing
