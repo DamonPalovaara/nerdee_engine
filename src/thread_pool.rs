@@ -38,11 +38,12 @@ impl ThreadPool {
         let receiver = Arc::new(Mutex::new(receiver));
 
         let (sync_out, sync_in) = mpsc::channel();
+        // This makes first call to wait non-blocking
         sync_out.send(0).unwrap();
         let sync_out = Arc::new(Mutex::new(sync_out));
 
         for id in 0..size {
-            println!("Starting worker {}!", id);
+            println!("Starting worker {}", id);
             workers.push(Worker::new(id, receiver.clone()));
         }
 
@@ -104,7 +105,7 @@ impl Drop for ThreadPool {
         }
 
         for worker in &mut self.workers {
-            println!("Stoping worker {}", worker.id);
+            println!("Stopping worker {}", worker.id);
             if let Some(thread) = worker.thread.take() {
                 thread.join().unwrap();
             }
@@ -122,7 +123,7 @@ struct Worker {
 impl Worker {
     /// Spawns a new worker
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
-
+        
         let thread = thread::spawn(move || loop {
             let message = receiver.lock().unwrap().recv().unwrap();
 
@@ -136,9 +137,8 @@ impl Worker {
             }
         });
 
-        Worker {
-            id,
-            thread: Some(thread),
-        }
+        let thread = Some(thread);
+
+        Worker { id, thread }
     }
 } 

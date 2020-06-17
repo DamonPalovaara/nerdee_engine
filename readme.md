@@ -12,10 +12,11 @@ cargo run
 
 ## Documentation
 
-To view documentation run the following command in the repository folder
+To view documentation run the following command in the repository folder  
+Will publish on crates.io soon and upload the documentation to docs.rs
 
 ```bash
-Cargo doc --open
+cargo doc --open
 ```
 
 ## Contributing
@@ -23,3 +24,6 @@ Feel free to create new engine objects by implementing the EngineObject trait in
 
 ## License
 //TODO
+
+
+Pueblo Bonito
