@@ -12,8 +12,7 @@ cargo run
 
 ## Documentation
 
-To view documentation run the following command in the repository folder  
-Will publish on crates.io soon and upload the documentation to docs.rs
+To view documentation run the following command in the repository folder
 
 ```bash
 cargo doc --open
@@ -24,6 +23,3 @@ Feel free to create new engine objects by implementing the EngineObject trait in
 
 ## License
 //TODO
-
-
-Pueblo Bonito
