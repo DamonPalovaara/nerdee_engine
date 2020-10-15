@@ -3,6 +3,10 @@ use std::thread;
 use crate::engine_core::*;
 use noise::{NoiseFn, Fbm};
 
+// For file output
+use std::fs::File;
+use std::io::prelude::*;
+
 const CHUNK_BLOCKS: usize = 512;
 const CHUNK_RADIUS: isize = (CHUNK_BLOCKS / 2) as isize;
 const BLOCK_SIZE:   f64   = 0.5;
@@ -56,25 +60,29 @@ impl Chunk {
         self.generate(noise);
     }
 
-    fn save(&self) {
+    fn save(&self) -> std::io::Result<()> {
         println!("Saving chunk: ({}, {})", self.coordinate.x, self.coordinate.y);
+        let file_name = format!("./data/x{}y{}.obj", self.coordinate.x, self.coordinate.y);
+        let mut file = File::create(file_name)?;
         self.mesh.iter().for_each(|point| {
-            
+            let line = format!("v {} {} {}\n", point.0, point.1, point.2);
+            file.write_all(line.as_bytes());
         });
+        Ok(())
     }
 
     fn load(&mut self) {
-        thread::sleep_ms(2);
+        
     }
 
     /// Updates the chunk
     fn update(&mut self) {
-        thread::sleep_ms(2);
+        
     }
 
     /// Renders the chunk to screen
     fn draw(&self) {
-        thread::sleep_ms(2);
+
     }
 }
 
@@ -124,7 +132,7 @@ impl EngineObject for Terrain {
             let chunk = chunk.clone();
             core.execute(move || {
                 let chunk = chunk.lock().unwrap();
-                chunk.save();
+                chunk.save().unwrap();
             });
         }
     }
