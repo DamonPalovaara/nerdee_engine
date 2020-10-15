@@ -57,7 +57,10 @@ impl Chunk {
     }
 
     fn save(&self) {
-        thread::sleep_ms(2);
+        println!("Saving chunk: ({}, {})", self.coordinate.x, self.coordinate.y);
+        self.mesh.iter().for_each(|point| {
+            
+        });
     }
 
     fn load(&mut self) {
@@ -116,13 +119,25 @@ impl EngineObject for Terrain {
     }
 
     /// Saves each chunk to a save folder
-    fn save(&self, _core: &Core) {
-
+    fn save(&self, core: &Core) {
+        for chunk in &self.chunks {
+            let chunk = chunk.clone();
+            core.execute(move || {
+                let chunk = chunk.lock().unwrap();
+                chunk.save();
+            });
+        }
     }
 
     /// Loads each chunk from a save folder
-    fn load(&mut self, _core: &Core) {
-
+    fn load(&mut self, core: &Core) {
+        for chunk in &self.chunks {
+            let chunk = chunk.clone();
+            core.execute(move || {
+                let mut chunk = chunk.lock().unwrap();
+                chunk.load();
+            });
+        }
     }
     
     /// Updates each Chunk using a ThreadPool

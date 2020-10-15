@@ -45,6 +45,11 @@ impl Engine {
         }
     }
 
+    pub fn initialize(&mut self) {
+        let core = self.core.clone();
+        self.start_up(&core);
+    }
+
     /// Adds a EngineObject to the Engine
     pub fn add(&mut self, item: Box<dyn EngineObject>) {
         self.items.push(item);
